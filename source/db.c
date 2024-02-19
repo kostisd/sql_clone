@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
         }
         switch (execute_statement(&statement, table)) {
             case (EXECUTE_SUCCESS):
-                printf("Ececuted.\n");
+                printf("Executed.\n");
                 break;
             case (EXECUTE_TABLE_FULL):
                 printf("Error: Table full.\n");
