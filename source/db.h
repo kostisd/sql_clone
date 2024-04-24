@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
+#include <errno.h>
+// for open()
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define COLUMN_USERNAME_SIZE 32
 #define COLUMN_EMAIL_SIZE 255
@@ -14,6 +20,39 @@ typedef struct {
     size_t buffer_length;
     ssize_t input_length;
 } InputBuffer;
+
+typedef struct {
+    uint32_t id;
+    char username[COLUMN_USERNAME_SIZE + 1];
+    char email[COLUMN_EMAIL_SIZE + 1];
+} Row;
+
+typedef enum {
+    STATEMENT_INSERT,
+    STATEMENT_SELECT
+} StatementType;
+
+typedef struct {
+    StatementType type;
+    Row row_to_insert;
+} Statement;
+
+typedef struct {
+    int file_descriptor;
+    uint32_t file_length;
+    void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+typedef struct {
+    uint32_t num_rows;
+    Pager* pager;
+} Table;
+
+typedef struct {
+    Table * table;
+    uint32_t row_num;
+    bool end_of_table; 
+} Cursor;
 
 typedef enum {
     META_COMMAND_SUCCESS,
@@ -29,31 +68,11 @@ typedef enum {
 } PrepareResult;
 
 typedef enum {
-    STATEMENT_INSERT,
-    STATEMENT_SELECT
-} StatementType;
-
-typedef enum {
     EXECUTE_SUCCESS,
     EXECUTE_TABLE_FULL,
     /* EXECUTE_DUPLICATE_KEY probably mot needed yet */
 } ExecuteResult; // WHY didn't he add this in part 3?
 
-typedef struct {
-    uint32_t id;
-    char username[COLUMN_USERNAME_SIZE + 1];
-    char email[COLUMN_EMAIL_SIZE + 1];
-} Row;
-
-typedef struct {
-    StatementType type;
-    Row row_to_insert;
-} Statement;
-
-typedef struct {
-    uint32_t num_rows;
-    void* pages[TABLE_MAX_PAGES];
-} Table;
 
 const uint32_t ID_SIZE = size_of_attribute(Row, id);
 const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
@@ -70,15 +89,22 @@ InputBuffer* new_input_buffer();
 void print_prompt();
 void read_input(InputBuffer* input_buffer);
 void close_input_buffer(InputBuffer* input_buffer);
-MetaCommandResult do_meta_command(InputBuffer* input_buffer);
+MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table* table);
 PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement);
 PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement);
 ExecuteResult execute_insert(Statement* statement, Table* table); 
 ExecuteResult execute_select(Statement* statement, Table* table);
 ExecuteResult execute_statement(Statement* statement, Table* table);
-Table* new_table();
+Pager* pager_open(const char* filename);
+void pager_flush(Pager* pager, uint32_t page_num, uint32_t size);
+void* get_page(Pager* pager, uint32_t page_num);
+Table* db_open(const char* filename);
+void db_close(Table* table);
+Cursor* table_start(Table* table);
+Cursor* table_end(Table* table);
 void print_row(Row* row);
-void free_table(Table* table);
 void serialize_row(Row* source, void* destination);
 void deserialize_row(void* source, Row* destination);
-void* row_slot(Table* table, uint32_t row_num);
+void* cursor_value(Cursor* cursor);
+void cursor_advance(Cursor* cursor);
+
